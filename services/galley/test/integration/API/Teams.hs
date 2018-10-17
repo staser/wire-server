@@ -346,6 +346,7 @@ testRemoveBindingTeamMember g b c a = do
                ) !!! const 202 === statusCode
 
         checkTeamMemberLeave tid (mem1^.userId) wsOwner
+        checkNoConvMemberLeaveEvent cid1 wsOwner
         checkConvMemberLeaveEvent cid1 (mem1^.userId) wsMext
 
         assertQueue "team member leave" a $ tUpdate 1 [owner]
@@ -809,6 +810,14 @@ checkConvDeleteEvent cid w = WS.assertMatch_ timeout w $ \notif -> do
     evtType e @?= Conv.ConvDelete
     evtConv e @?= cid
     evtData e @?= Nothing
+
+checkNoConvMemberLeaveEvent :: HasCallStack => ConvId -> WS.WebSocket -> Http ()
+checkNoConvMemberLeaveEvent cid w = WS.assertNoMatch timeout w
+    (\notif ->
+        let e = List1.head (WS.unpackPayload notif)
+        in and [ evtConv e == cid
+               , evtType e == Conv.MemberLeave
+               ])
 
 checkConvMemberLeaveEvent :: HasCallStack => ConvId -> UserId -> WS.WebSocket -> Http ()
 checkConvMemberLeaveEvent cid usr w = WS.assertMatch_ timeout w $ \notif -> do

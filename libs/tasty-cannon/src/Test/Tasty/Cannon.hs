@@ -25,6 +25,7 @@ module Test.Tasty.Cannon
     , await
     , awaitMatch
     , awaitMatch_
+    , assertNoMatch
     , awaitMatchN
     , assertMatch
     , assertMatch_
@@ -48,7 +49,7 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Concurrent.Timeout hiding (threadDelay)
-import Control.Exception (SomeAsyncException, asyncExceptionFromException, throwIO)
+import Control.Exception (SomeAsyncException, ErrorCall(..), asyncExceptionFromException, throwIO)
 import Control.Monad (void, forever, unless)
 import Control.Monad.Catch hiding (bracket)
 import Control.Monad.IO.Class
@@ -241,6 +242,27 @@ awaitMatch_ :: (HasCallStack, MonadIO m, MonadCatch m)
            -> (Notification -> Assertion)
            -> m ()
 awaitMatch_ t w = void . awaitMatch t w
+
+-- | Like 'awaitMatch', but throws an exception iff there is an event matching a given boolean
+-- property.
+assertNoMatch
+  :: (HasCallStack, MonadIO m, MonadCatch m)
+  => Timeout -> WebSocket -> (Notification -> Bool) -> m ()
+assertNoMatch t ws prop = go []
+  where
+    go buf = do
+        mn <- await t ws
+        case mn of
+            Just  n -> if prop n
+                then do
+                    refill buf
+                    throwM . MatchFailure . SomeException . ErrorCall $
+                        show n <> ": shouldn't match, but does"
+                else go (n : buf)
+            Nothing -> do
+                refill buf
+
+    refill = mapM_ (liftIO . atomically . writeTChan (wsChan ws))
 
 assertMatch :: (HasCallStack, MonadIO m, MonadCatch m)
             => Timeout
