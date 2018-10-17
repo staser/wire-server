@@ -35,6 +35,7 @@ module Test.Tasty.Cannon
 
       -- * Unpacking Notifications
     , unpackPayload
+    , unpackEitherPayload
 
       -- * Randomness
     , randomConnId
@@ -255,7 +256,7 @@ assertNoMatch t ws prop = go []
         case mn of
             Just  n -> if prop n
                 then do
-                    refill buf
+                    refill (n : buf)
                     throwM . MatchFailure . SomeException . ErrorCall $
                         show n <> ": shouldn't match, but does"
                 else go (n : buf)
@@ -312,6 +313,13 @@ unpackPayload = fmap decodeEvent . ntfPayload
     decodeEvent o = case fromJSON (Object o) of
         JSON.Success x -> x
         JSON.Error   e -> error e
+
+unpackEitherPayload :: FromJSON a => Notification -> List1 (Either String a)
+unpackEitherPayload = fmap decodeEvent . ntfPayload
+  where
+    decodeEvent o = case fromJSON (Object o) of
+        JSON.Success x -> Right x
+        JSON.Error   e -> Left e
 
 -----------------------------------------------------------------------------
 -- Randomness
